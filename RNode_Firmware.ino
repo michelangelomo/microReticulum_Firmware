@@ -242,6 +242,12 @@ RNS::Interface lora_interface(RNS::Type::NONE);
 #if defined(UDP_TRANSPORT)
 RNS::Interface udp_interface(RNS::Type::NONE);
 #endif
+#if HAS_ETHERNET && defined(TCP_TRANSPORT)
+#include "TCPClientInterface.h"
+#include "TCPServerInterface.h"
+RNS::Interface tcp_server_interface(RNS::Type::NONE);
+RNS::Interface tcp_client_interface(RNS::Type::NONE);
+#endif
 #if defined(RNS_USE_FS)
   // CBA microStore
   #if MCU_VARIANT == MCU_ESP32
@@ -709,6 +715,24 @@ void setup() {
         udp_interface.mode(RNS::Type::Interface::MODE_GATEWAY);
         RNS::Transport::register_interface(udp_interface);
         TRACEF("UDPInterface hash: %s", udp_interface.get_hash().toHex().c_str());
+      }
+#endif
+
+#if HAS_ETHERNET && defined(TCP_TRANSPORT)
+      ethernet_init();
+      if (ethernet_initialized) {
+        HEAD("Registering TCPServerInterface...", RNS::LOG_TRACE);
+        tcp_server_interface = new TCPServerInterface();
+        tcp_server_interface.mode(RNS::Type::Interface::MODE_GATEWAY);
+        RNS::Transport::register_interface(tcp_server_interface);
+        TRACEF("TCPServerInterface hash: %s", tcp_server_interface.get_hash().toHex().c_str());
+        if (eth_host[0] != '\0' && eth_port != 0) {
+          HEAD("Registering TCPClientInterface...", RNS::LOG_TRACE);
+          tcp_client_interface = new TCPClientInterface("TCPClientInterface", eth_host, eth_port);
+          tcp_client_interface.mode(RNS::Type::Interface::MODE_GATEWAY);
+          RNS::Transport::register_interface(tcp_client_interface);
+          TRACEF("TCPClientInterface hash: %s", tcp_client_interface.get_hash().toHex().c_str());
+        }
       }
 #endif
 
@@ -1740,6 +1764,18 @@ void serial_callback(uint8_t sbyte) {
 
         if (frame_len == 4) { for (uint8_t i = 0; i<4; i++) { eeprom_update(config_addr(ADDR_CONF_NM+i), cmdbuf[i]); } }
       #endif
+    } else if (command == CMD_ETH_ENABLE) {
+      #if HAS_ETHERNET
+        if (sbyte == FESC) { ESCAPE = true; }
+        else {
+          if (ESCAPE) {
+            if (sbyte == TFEND) sbyte = FEND;
+            if (sbyte == TFESC) sbyte = FESC;
+            ESCAPE = false;
+          }
+          eeprom_update(ADDR_ETH_ENABLE, sbyte);
+        }
+      #endif
     } else if (command == CMD_BT_CTRL) {
       #if HAS_BLUETOOTH || HAS_BLE
         if (sbyte == 0x00) {
@@ -2277,6 +2313,10 @@ void loop() {
 
   #if HAS_WIFI
     if (wifi_initialized) update_wifi();
+  #endif
+
+  #if HAS_ETHERNET
+    if (ethernet_initialized) update_ethernet();
   #endif
 
   #if HAS_INPUT

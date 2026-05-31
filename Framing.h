@@ -71,6 +71,7 @@
   #define CMD_WIFI_CHN    0x6E
   #define CMD_WIFI_IP     0x84
   #define CMD_WIFI_NM     0x85
+  #define CMD_ETH_ENABLE  0x86
 
   #define CMD_BOARD       0x47
   #define CMD_PLATFORM    0x48

@@ -64,6 +64,10 @@ uint8_t eeprom_read(uint32_t mapped_addr);
   #include "Remote.h"
 #endif
 
+#if HAS_ETHERNET == true
+  #include "Ethernet.h"
+#endif
+
 #if HAS_PMU == true
   #include "Power.h"
 #endif

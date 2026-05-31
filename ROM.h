@@ -58,6 +58,21 @@
   #define ADDR_CONF_PSK  0x21
   #define ADDR_CONF_IP   0x42
   #define ADDR_CONF_NM   0x46
+
+  // Ethernet/TCP backbone config.
+  // Raw EEPROM addresses in the pre-offset region on NRF52 (0..95 unused there).
+  // On ESP32 these addresses overlap config_addr space but are unused because
+  // HAS_ETHERNET is only ever true on NRF52 RAK4631+RAK13800 builds.
+  #define ADDR_ETH_ENABLE 0x00   // 1 byte: must equal ETH_ENABLE_BYTE to opt in
+  #define ADDR_ETH_DHCP   0x01   // 1 byte: 0x00 = static, else DHCP
+  #define ADDR_ETH_IP     0x02   // 4 bytes (static)
+  #define ADDR_ETH_NM     0x06   // 4 bytes (static)
+  #define ADDR_ETH_GW     0x0A   // 4 bytes (static)
+  #define ADDR_ETH_DNS    0x0E   // 4 bytes (static)
+  #define ADDR_ETH_PORT   0x12   // 2 bytes, big-endian
+  #define ADDR_ETH_HOST   0x14   // 64 bytes, null-terminated
+  #define ETH_HOST_MAXLEN 64
+  #define ETH_ENABLE_BYTE 0x73   // Factory-fresh EEPROM (0xFF) is NOT enabled
   //////////////////////////////////
 
 #endif

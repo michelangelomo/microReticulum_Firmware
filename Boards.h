@@ -163,6 +163,8 @@
   #define HAS_EEPROM false
   #define HAS_INPUT false
   #define HAS_SLEEP false
+  #define HAS_ETHERNET false
+  #define HAS_RAK13800 false
   #define HAS_LORA_PA false
   #define HAS_LORA_LNA false
   #define PIN_DISP_SLEEP -1
@@ -735,6 +737,10 @@
       #define HAS_RF_SWITCH_RX_TX true
       #define HAS_BUSY true
       #define HAS_INPUT true
+      #undef HAS_ETHERNET
+      #define HAS_ETHERNET true
+      #undef HAS_RAK13800
+      #define HAS_RAK13800 true
       #define DIO2_AS_RF_SWITCH true
       #define CONFIG_UART_BUFFER_SIZE 6144
       #define CONFIG_QUEUE_SIZE 6144
@@ -759,6 +765,12 @@
       const int pin_led_rx = LED_BLUE;
       const int pin_led_tx = LED_GREEN;
       const int pin_tcxo_enable = -1;
+
+      // RAK13800 Ethernet module (W5100S) on RAK19007 IO_SLOT.
+      // SPI lines come from the default Arduino SPI bus (PIN_SPI_MOSI/MISO/SCK).
+      const int pin_eth_cs  = SS;      // P0.26
+      const int pin_eth_en  = WB_IO2;  // P1.02 — power enable (drive HIGH)
+      const int pin_eth_rst = WB_IO3;  // P0.21 — active-low reset
 
     #elif BOARD_MODEL == BOARD_TECHO
       #define _PINNUM(port, pin) ((port) * 32 + (pin))
