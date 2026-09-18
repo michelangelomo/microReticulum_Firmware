@@ -82,6 +82,10 @@ volatile uint8_t queue_height = 0;
 volatile uint16_t queued_bytes = 0;
 volatile uint16_t queue_cursor = 0;
 volatile uint16_t current_packet_start = 0;
+
+// Set once an external SPI flash has been brought up on the shared WisBlock
+// IO-slot chip select, so no other peripheral (see eth_init()) claims it.
+bool spi_ss_in_use = false;
 volatile bool serial_buffering = false;
 #if HAS_BLUETOOTH || HAS_BLE == true
   bool bt_init_ran = false;
@@ -554,6 +558,12 @@ void setup() {
   #endif
 
   #if MCU_VARIANT == MCU_NRF52
+    #if HAS_ETHERNET == true
+      // Switched 3V3_S rail for the WisBlock IO slot. eth_init() runs at the
+      // end of setup() and turns it off again if no Ethernet module answers.
+      eth_power_on();
+    #endif
+
     #if BOARD_MODEL == BOARD_TECHO
       delay(200);
       pinMode(PIN_VEXT_EN, OUTPUT);
@@ -926,6 +936,7 @@ void setup() {
       if (filesystem.init()) {
         TRACE("Initialized RAK15001 flash");
         init_success = true;
+        spi_ss_in_use = true;
         // Raise path store limits to account for larger external flash size
         RNS::Transport::path_table_maxsize(500);
         RNS::Transport::path_store_segment_size(24576);
@@ -1175,6 +1186,12 @@ printf("[init] op_mode: %U\n", op_mode);
     ERRORF("RNS startup failed: %s", e.what());
   }
 #endif  // HAS_RNS
+
+  #if HAS_ETHERNET == true
+    // Deliberately after the external-flash probe above, which drives the
+    // same IO-slot chip select as the Ethernet module.
+    if (!console_active) { eth_init(); }
+  #endif
 }
 
 void lora_receive() {
@@ -2768,6 +2785,10 @@ void loop() {
     if (wifi_initialized) update_wifi();
   #endif
 
+  #if HAS_ETHERNET == true
+    update_eth();
+  #endif
+
   #if HAS_INPUT
     input_read();
   #endif
@@ -2921,17 +2942,28 @@ void buffer_serial() {
       if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, native_kiss_tcp::read()); }
     }
     #else
+    #if HAS_ETHERNET == true
+      // Ethernet input is only serviced while no Bluetooth host is attached:
+      // a Bluetooth host owns the KISS channel in both directions.
+      #if HAS_BLUETOOTH || HAS_BLE == true
+        #define ETH_INPUT_PENDING() (bt_state != BT_STATE_CONNECTED && eth_remote_available())
+      #else
+        #define ETH_INPUT_PENDING() eth_remote_available()
+      #endif
+    #else
+      #define ETH_INPUT_PENDING() false
+    #endif
     #if HAS_BLUETOOTH || HAS_BLE == true
     while (
       c < MAX_CYCLES &&
       #if HAS_WIFI
-      ( (bt_state != BT_STATE_CONNECTED && Serial.available()) || (bt_state == BT_STATE_CONNECTED && SerialBT.available()) || (wr_state >= WR_STATE_ON && wifi_remote_available()) )
+      ( (bt_state != BT_STATE_CONNECTED && Serial.available()) || (bt_state == BT_STATE_CONNECTED && SerialBT.available()) || (wr_state >= WR_STATE_ON && wifi_remote_available()) || ETH_INPUT_PENDING() )
       #else
-      ( (bt_state != BT_STATE_CONNECTED && Serial.available()) || (bt_state == BT_STATE_CONNECTED && SerialBT.available()) )
+      ( (bt_state != BT_STATE_CONNECTED && Serial.available()) || (bt_state == BT_STATE_CONNECTED && SerialBT.available()) || ETH_INPUT_PENDING() )
       #endif
       )
     #else
-    while (c < MAX_CYCLES && Serial.available())
+    while (c < MAX_CYCLES && (Serial.available() || ETH_INPUT_PENDING()))
     #endif
     {
       c++;
@@ -2943,11 +2975,18 @@ void buffer_serial() {
         #if HAS_WIFI
         else if (wifi_host_is_connected())       { if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, wifi_remote_read()); } }
         #endif
+        #if HAS_ETHERNET == true
+        else if (eth_remote_pending())           { if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, eth_remote_read()); } }
+        #endif
         else                                     { if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); } }
+      #elif HAS_ETHERNET == true
+        if (eth_remote_pending()) { if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, eth_remote_read()); } }
+        else                      { if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); } }
       #else
         if (!fifo_isfull(&serialFIFO)) { fifo_push(&serialFIFO, Serial.read()); }
       #endif
     }
+    #undef ETH_INPUT_PENDING
     #endif
 
     serial_buffering = false;
