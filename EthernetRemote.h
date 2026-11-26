@@ -151,9 +151,12 @@ static void eth_close_all() {
   if (eth_connection) { eth_close(eth_connection); }
 }
 
+// Console output is routed to the Ethernet host while one is attached, so the
+// reason is printed after closing; otherwise it would go to the host being
+// dropped instead of the serial console.
 static void eth_disconnect(const char *reason) {
-  printf("[ETH] host disconnected: %s (%lu frames dropped)\n", reason, (unsigned long)eth_tx_dropped_frames);
   eth_close_all();
+  printf("[ETH] host disconnected: %s (%lu frames dropped)\n", reason, (unsigned long)eth_tx_dropped_frames);
   host_disconnected();
 }
 
@@ -259,8 +262,8 @@ static void eth_poll_listener(uint32_t now) {
   EthernetClient client = eth_listener.accept();
   if (!client) { return; }
   if (eth_connection) {
-    printf("[ETH] new host connection replaces the current one\n");
     eth_close_all();
+    printf("[ETH] new host connection replaces the current one\n");
     host_disconnected();      // the new host configures the radio from scratch
   }
   eth_connection = client;
@@ -367,8 +370,8 @@ static void eth_check_chip() {
   uint8_t current_mac[6];
   Ethernet.MACAddress(current_mac);
   if (memcmp(current_mac, eth_mac, 6) == 0) { return; }
-  printf("[ETH] W5100S lost its configuration, reinitializing\n");
   if (eth_connection) { eth_disconnect("W5100S reset"); }
+  printf("[ETH] W5100S lost its configuration, reinitializing\n");
   eth_hw_reset();
   // The PHY needs time to negotiate after a reset and would report LinkOFF
   // too early; clearing the flag makes eth_start() skip the link gate once.
